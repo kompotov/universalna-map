@@ -1,0 +1,88 @@
+# Pull fresh data from universalna.com, geocode new addresses (cached in data/geocache.json),
+# rebuild CSVs + site data, commit after every region, and publish site/ to GitHub Pages.
+#
+# - Weekly run: updates every region already on the map ("filled"). New addresses only, so minutes.
+# - Manual run (Actions -> Update map -> Run workflow): pass region slugs to add new regions,
+#   e.g. "kyiv" or "dnipro kharkiv odesa", or "all". A first fill of a big region takes hours;
+#   the job stops new lookups before GitHub's 6h limit and keeps everything found so far, so just
+#   run it again to continue.
+#
+# Setup: Settings -> Pages -> Source: GitHub Actions.
+# Optional: a GOOGLE_MAPS_API_KEY repository secret geocodes with Google instead of OpenStreetMap.
+name: Update map
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+    inputs:
+      regions:
+        description: "Region slugs (space separated), 'filled' (regions already on the map) or 'all'"
+        default: "filled"
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: update-map
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Download fresh data
+        env:
+          # Pages URL for robots.txt/sitemap.xml; set a SITE_URL repository variable for a custom domain
+          SITE_URL: ${{ vars.SITE_URL || format('https://{0}.github.io/{1}/', github.repository_owner, github.event.repository.name) }}
+        run: python generate.py --fetch --region filled --cached --site
+      - name: Geocode + export, committing after each region
+        env:
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+          REGIONS_INPUT: ${{ github.event.inputs.regions || 'filled' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          commit() {
+            git add data/geocache.json out site/data
+            if ! git diff --cached --quiet; then
+              git commit -q -m "$1"
+              git push -q
+            fi
+          }
+          # Leave ~25 min of the 6h job for exports, commits and the Pages deploy.
+          deadline=$(( $(date +%s) + 320 * 60 ))
+          regions=$(python generate.py --region $REGIONS_INPUT --print-regions)
+          echo "Regions: ${regions:-none}"
+          for r in $regions; do
+            left=$(( (deadline - $(date +%s)) / 60 ))
+            if [ "$left" -le 5 ]; then
+              echo "Out of time before $r - run the workflow again to continue."
+              break
+            fi
+            echo "::group::$r ($left min left)"
+            python -u generate.py --region "$r" --geocode --site --max-minutes "$left"
+            echo "::endgroup::"
+            commit "Update $r map data ($(date -u +%F))"
+          done
+          commit "Update map data ($(date -u +%F))"
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

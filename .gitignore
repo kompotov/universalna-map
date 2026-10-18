@@ -1,0 +1,18 @@
+# Python / editors
+__pycache__/
+*.pyc
+.idea/
+.vscode/
+.claude/
+
+# Raw source snapshots: always re-downloadable with `--fetch` (auto-downloaded when missing)
+data.json
+data/lpz_all.html
+
+# Scratch output
+data/*.log
+data/*.tmp
+
+# Generated in CI from the Pages URL (generate.py --site-url / SITE_URL)
+site/robots.txt
+site/sitemap.xml

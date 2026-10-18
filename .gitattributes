@@ -1,0 +1,3 @@
+# Normalize line endings: files written on Windows (CRLF) and by the GitHub Action (LF)
+# would otherwise show every line as changed.
+* text=auto eol=lf
