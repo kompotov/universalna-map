@@ -108,7 +108,7 @@ Netlify and Cloudflare Pages can host from a private repo instead.
    `https://<you>.github.io/<repo>/`.
 
 [`.github/workflows/update-map.yml`](.github/workflows/update-map.yml):
-- **Every Monday** it downloads fresh data and updates every region already on the map
+- **Every Monday**, and on every push that changes `site/index.html` or `generate.py`, it downloads fresh data and updates every region already on the map
   (`filled`). Only new or changed addresses are geocoded, so a run takes minutes. Then it
   redeploys the site.
 - **Adding regions**: start it by hand with region slugs, e.g. `kyiv` or `dnipro kharkiv odesa`.

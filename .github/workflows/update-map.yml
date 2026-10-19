@@ -2,6 +2,7 @@
 # rebuild CSVs + site data, commit after every region, and publish site/ to GitHub Pages.
 #
 # - Weekly run: updates every region already on the map ("filled"). New addresses only, so minutes.
+# - Push to main that touches site/index.html, generate.py or this file: same as the weekly run.
 # - Manual run (Actions -> Update map -> Run workflow): pass region slugs to add new regions,
 #   e.g. "kyiv" or "dnipro kharkiv odesa", or "all". A first fill of a big region takes hours;
 #   the job stops new lookups before GitHub's 6h limit and keeps everything found so far, so just
@@ -14,6 +15,14 @@ name: Update map
 on:
   schedule:
     - cron: "0 3 * * 1"
+  # Redeploy when the page or generator changes. Pushes made by this workflow (GITHUB_TOKEN)
+  # don't trigger workflows, so its own data commits can't cause a loop.
+  push:
+    branches: [main]
+    paths:
+      - "site/index.html"
+      - "generate.py"
+      - ".github/workflows/update-map.yml"
   workflow_dispatch:
     inputs:
       regions:
@@ -54,6 +63,7 @@ jobs:
             git add data/geocache.json out site/data
             if ! git diff --cached --quiet; then
               git commit -q -m "$1"
+              git pull -q --rebase   # someone may have pushed while this job was running
               git push -q
             fi
           }
